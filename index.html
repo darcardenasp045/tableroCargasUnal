@@ -1,0 +1,3642 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>UNAL | Tablero de Cargas Laborales</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+<style>
+    body {
+        background: #f4f6f8;
+    }
+
+    .card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+
+    .chart-container {
+        position: relative;
+        height: 350px;
+    }
+
+    .tab-btn.active {
+        background: #006633;
+        color: white;
+    }
+
+    .instrumento-row:hover {
+        background: #f0fdf4;
+        cursor: pointer;
+    }
+
+    @media print {
+
+        @page {
+            size: landscape;
+            margin: 10mm;
+        }
+
+        body {
+            background: white;
+            font-size: 10px;
+        }
+
+        header {
+            box-shadow: none !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ddd;
+            break-inside: avoid;
+        }
+
+        .no-print,
+        button,
+        label[for="archivoExcel"],
+        #archivoExcel {
+            display: none !important;
+        }
+
+        .chart-container {
+            break-inside: avoid;
+            height: 300px !important;
+        }
+
+        main {
+            max-width: 100%;
+            padding: 8px;
+        }
+
+        canvas {
+            max-width: 100% !important;
+        }
+    }
+</style>
+</head>
+
+<body class="text-gray-800">
+
+<header class="bg-[#006633] text-white shadow">
+
+    <div class="max-w-[1500px] mx-auto px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+        <div>
+            <h1 class="text-2xl font-bold">
+                Universidad Nacional de Colombia
+            </h1>
+
+            <p class="text-green-100 text-sm mt-1">
+                Tablero de análisis de cargas laborales
+            </p>
+        </div>
+
+        <div class="flex gap-3 no-print">
+
+            <button
+                onclick="window.print()"
+                class="bg-green-800 text-white font-bold px-5 py-2.5 rounded-lg hover:bg-green-900"
+            >
+                🖨️ Imprimir / PDF
+            </button>
+
+            <label
+                for="archivoExcel"
+                class="bg-white text-[#006633] font-bold px-5 py-2.5 rounded-lg cursor-pointer hover:bg-green-50"
+            >
+                📂 Cargar consolidado
+            </label>
+
+        </div>
+
+        <input
+            id="archivoExcel"
+            type="file"
+            accept=".xlsx,.xls"
+            class="hidden"
+        >
+
+    </div>
+
+</header>
+
+
+<main class="max-w-[1500px] mx-auto p-6">
+
+
+<!-- PANTALLA INICIAL -->
+
+<section id="pantallaInicial" class="card p-10 text-center mt-4">
+
+    <div class="text-5xl mb-4">
+        📊
+    </div>
+
+    <h2 class="text-2xl font-bold">
+        Análisis de Cargas Laborales
+    </h2>
+
+    <p class="text-gray-500 max-w-2xl mx-auto mt-3">
+        Cargue el archivo consolidado de instrumentos para generar
+        automáticamente los indicadores y análisis.
+    </p>
+
+    <label
+        for="archivoExcel"
+        class="inline-block mt-6 bg-[#006633] text-white font-bold px-6 py-3 rounded-lg cursor-pointer hover:bg-green-800"
+    >
+        Seleccionar archivo Excel
+    </label>
+
+</section>
+
+
+<!-- DASHBOARD -->
+
+<section id="dashboard" class="hidden">
+
+    <!-- INFORMACIÓN -->
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-2 mb-5">
+
+        <div>
+            <h2 class="text-xl font-bold">
+                Análisis general
+            </h2>
+
+            <p id="nombreArchivo" class="text-sm text-gray-500"></p>
+        </div>
+
+        <div
+            id="estadoArchivo"
+            class="text-sm bg-green-100 text-green-800 px-4 py-2 rounded-lg font-semibold"
+        ></div>
+
+    </div>
+
+
+    <!-- FILTROS -->
+
+    <div class="card p-5 mb-6 no-print">
+
+        <div class="flex justify-between items-center mb-4">
+
+            <h3 class="font-bold">
+                Filtros de consulta
+            </h3>
+
+            <button
+                onclick="limpiarFiltros()"
+                class="text-sm text-[#006633] font-semibold hover:underline"
+            >
+                Limpiar filtros
+            </button>
+
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            <div>
+                <label class="text-xs font-bold text-gray-500 uppercase">
+                    Sede
+                </label>
+
+                <select id="filtroSede" class="w-full border rounded-lg p-2.5 mt-1">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-gray-500 uppercase">
+                    Dependencia
+                </label>
+
+                <select id="filtroDependencia" class="w-full border rounded-lg p-2.5 mt-1">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-gray-500 uppercase">
+                    Nivel jerárquico
+                </label>
+
+                <select id="filtroNivel" class="w-full border rounded-lg p-2.5 mt-1">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold text-gray-500 uppercase">
+                    Instrumento
+                </label>
+
+                <select id="filtroInstrumento" class="w-full border rounded-lg p-2.5 mt-1">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- KPIs -->
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+
+        <div class="card p-5 border-t-4 border-[#006633]">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+                Instrumentos
+            </p>
+
+            <p id="kpiInstrumentos" class="text-3xl font-bold mt-2">
+                0
+            </p>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Servidores analizados
+            </p>
+        </div>
+
+
+        <div class="card p-5 border-t-4 border-blue-600">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+                Índice promedio de carga
+            </p>
+
+            <p id="kpiCarga" class="text-3xl font-bold mt-2">
+                —
+            </p>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Promedio de TOTAL CARGA
+            </p>
+        </div>
+
+
+        <div class="card p-5 border-t-4 border-purple-600">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+                Funciones analizadas
+            </p>
+
+            <p id="kpiFunciones" class="text-3xl font-bold mt-2">
+                0
+            </p>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Funciones esenciales
+            </p>
+        </div>
+
+
+        <div class="card p-5 border-t-4 border-amber-500">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+                Actividades
+            </p>
+
+            <p id="kpiActividades" class="text-3xl font-bold mt-2">
+                0
+            </p>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Actividades identificadas
+            </p>
+        </div>
+
+
+        <div class="card p-5 border-t-4 border-cyan-600">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+                Horas hombre / mes
+            </p>
+
+            <p id="kpiHoras" class="text-3xl font-bold mt-2">
+                0
+            </p>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Total de actividades
+            </p>
+        </div>
+
+    </div>
+
+
+    <!-- PESTAÑAS -->
+
+    <div class="flex gap-2 mb-5 overflow-x-auto no-print">
+
+        <button
+            class="tab-btn active px-5 py-2 rounded-lg font-semibold whitespace-nowrap"
+            onclick="mostrarTab('resumen', this)"
+        >
+            Resumen
+        </button>
+
+        <button
+            class="tab-btn px-5 py-2 rounded-lg font-semibold bg-white whitespace-nowrap"
+            onclick="mostrarTab('funciones', this)"
+        >
+            Funciones
+        </button>
+
+        <button
+            class="tab-btn px-5 py-2 rounded-lg font-semibold bg-white whitespace-nowrap"
+            onclick="mostrarTab('actividades', this)"
+        >
+            Actividades
+        </button>
+
+        <button
+            class="tab-btn px-5 py-2 rounded-lg font-semibold bg-white whitespace-nowrap"
+            onclick="mostrarTab('servidores', this)"
+        >
+            Servidores
+        </button>
+
+    </div>
+
+
+    <!-- RESUMEN -->
+
+    <div id="tab-resumen" class="tab-content">
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Índice de carga por servidor
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Valor registrado en TOTAL CARGA
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartCarga"></canvas>
+                </div>
+
+            </div>
+
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Ejecución de funciones
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Funciones que el servidor manifiesta realizar o no realizar
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartFunciones"></canvas>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Distribución por tipo de carga
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Número de actividades por clasificación
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartTipoCarga"></canvas>
+                </div>
+
+            </div>
+
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Nivel de impacto
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Distribución de las actividades según impacto
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartImpacto"></canvas>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- FUNCIONES -->
+
+    <div id="tab-funciones" class="tab-content hidden">
+
+        <div class="card overflow-hidden">
+
+            <div class="p-5 border-b">
+                <h3 class="font-bold text-lg">
+                    Funciones esenciales
+                </h3>
+
+                <p class="text-sm text-gray-500 mt-1">
+                    Funciones identificadas en los instrumentos seleccionados.
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+
+                <table class="w-full text-sm">
+
+                    <thead class="bg-gray-100 text-gray-600">
+                        <tr>
+                            <th class="p-3 text-left">Instrumento</th>
+                            <th class="p-3 text-left">Cargo</th>
+                            <th class="p-3 text-left">Función</th>
+                            <th class="p-3 text-center">Realiza</th>
+                            <th class="p-3 text-left">Motivo no realización</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="tablaFunciones"></tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ACTIVIDADES -->
+
+    <div id="tab-actividades" class="tab-content hidden">
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Horas hombre por flujo
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Concentración mensual de horas según flujo de actividad
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartFlujoHoras"></canvas>
+                </div>
+
+            </div>
+
+
+            <div class="card p-5">
+
+                <h3 class="font-bold text-lg">
+                    Actividades con mayor dedicación
+                </h3>
+
+                <p class="text-xs text-gray-500 mt-1 mb-4">
+                    Mayor cantidad de horas hombre mensuales
+                </p>
+
+                <div class="chart-container">
+                    <canvas id="chartTopActividades"></canvas>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="card overflow-hidden">
+
+            <div class="p-5 border-b">
+                <h3 class="font-bold text-lg">
+                    Detalle de actividades
+                </h3>
+            </div>
+
+            <div class="overflow-x-auto">
+
+                <table class="w-full text-xs">
+
+                    <thead class="bg-gray-100 text-gray-600">
+
+                        <tr>
+                            <th class="p-3 text-left">Instrumento</th>
+                            <th class="p-3 text-left">Flujo</th>
+                            <th class="p-3 text-left">Actividad</th>
+                            <th class="p-3 text-left">Tipo carga</th>
+                            <th class="p-3 text-center">Frecuencia</th>
+                            <th class="p-3 text-right">T. estándar</th>
+                            <th class="p-3 text-right">HH / mes</th>
+                            <th class="p-3 text-center">Impacto</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="tablaActividades"></tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- SERVIDORES -->
+
+    <div id="tab-servidores" class="tab-content hidden">
+
+        <div class="card overflow-hidden">
+
+            <div class="p-5 border-b">
+
+                <h3 class="font-bold text-lg">
+                    Resumen por servidor / instrumento
+                </h3>
+
+                <p class="text-sm text-gray-500 mt-1">
+                    Seleccione un instrumento para analizarlo individualmente.
+                </p>
+
+            </div>
+
+            <div class="overflow-x-auto">
+
+                <table class="w-full text-sm">
+
+                    <thead class="bg-gray-100 text-gray-600">
+
+                        <tr>
+                            <th class="p-3 text-left">Instrumento</th>
+                            <th class="p-3 text-left">Sede</th>
+                            <th class="p-3 text-left">Dependencia</th>
+                            <th class="p-3 text-left">Cargo</th>
+                            <th class="p-3 text-center">Código</th>
+                            <th class="p-3 text-center">Grado</th>
+                            <th class="p-3 text-center">Funciones</th>
+                            <th class="p-3 text-center">Actividades</th>
+                            <th class="p-3 text-right">HH / mes</th>
+                            <th class="p-3 text-right">Carga</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="tablaServidores"></tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+</main>
+
+
+<script>
+
+/* ============================================================
+   CHART.JS
+============================================================ */
+
+Chart.register(ChartDataLabels);
+
+Chart.defaults.font.family =
+    "Arial, Helvetica, sans-serif";
+
+Chart.defaults.color =
+    "#374151";
+
+
+/* ============================================================
+   VARIABLES
+============================================================ */
+
+let datos = [];
+let datosFiltrados = [];
+let graficos = {};
+
+const $ = id =>
+    document.getElementById(id);
+
+
+/* ============================================================
+   CAMPOS
+============================================================ */
+
+const CAMPOS = {
+
+    archivo: "ARCHIVO",
+
+    ficha: "FICHA",
+
+    sede: "SEDE",
+
+    dependencia: [
+        "DEPENDENCIA",
+        "DEPENDECIA"
+    ],
+
+    grupo:
+        "GRUPO OCUPACIONAL",
+
+    nivel: [
+        "NIVEL JERARGUICO",
+        "NIVEL JERÁRQUICO"
+    ],
+
+    naturaleza:
+        "NATURALEZA DEL EMPLEO",
+
+    denominacion: [
+        "DENOMINACION",
+        "DENOMINACIÓN"
+    ],
+
+    codigo: [
+        "CODIGO",
+        "CÓDIGO"
+    ],
+
+    grado:
+        "GRADO",
+
+    dedicacion: [
+        "DEDICACION",
+        "DEDICACIÓN"
+    ],
+
+    funcion: [
+        "DESCRIPCION DE FUNCIONES ESENCIALES",
+        "DESCRIPCIÓN DE FUNCIONES ESENCIALES"
+    ],
+
+    realiza: [
+        "REALIZAS ESTA FUNCION SI/NO",
+        "REALIZAS ESTA FUNCIÓN SI/NO"
+    ],
+
+    motivo: [
+        "MOTIVO POR LA NO REALIZACION",
+        "MOTIVO POR LA NO REALIZACIÓN"
+    ],
+
+    procedimiento:
+        "PROCEDIMIENTO",
+
+    actividad:
+        "ACTIVIDAD",
+
+    flujo: [
+        "FLUJO DE LA ACTIVIDAD",
+        "FLUJO DE ACTIVIDAD"
+    ],
+
+    tipoCarga:
+        "TIPOS DE CARGA",
+
+    herramientas:
+        "HERRAMIENTAS",
+
+    frecuencia:
+        "CANTIDAD PROMEDIO DE VECES QUE SE REALIZA ESTA ACTIVIDAD AL MES",
+
+    tiempoEstandar: [
+        "TIEMPO POR CADA ACTIVIDAD EN HORAS (TIEMPO ESTANDAR)",
+        "TIEMPO POR CADA ACTIVIDAD EN HORAS (TIEMPO ESTÁNDAR)"
+    ],
+
+    impacto:
+        "NIVEL DE IMPACTO",
+
+    interface:
+        "INTERFACE",
+
+    producto:
+        "PRODUCTO",
+
+    horas:
+        "TOTAL PROMEDIO MES - HORAS HOMBRE POR ACTIVIDAD",
+
+    carga:
+        "TOTAL CARGA"
+};
+
+
+/* ============================================================
+   NORMALIZACIÓN
+============================================================ */
+
+function normalizarEncabezado(texto) {
+
+    return String(texto ?? "")
+        .replace(/\n/g, " ")
+        .replace(/\r/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+}
+
+
+function limpiarTexto(valor) {
+
+    if (
+        valor === null ||
+        valor === undefined
+    ) {
+        return "";
+    }
+
+    return String(valor)
+        .replace(/\s+/g, " ")
+        .trim();
+
+}
+
+
+function numero(valor) {
+
+    if (
+        valor === "" ||
+        valor === null ||
+        valor === undefined
+    ) {
+        return 0;
+    }
+
+    if (typeof valor === "number") {
+        return valor;
+    }
+
+    let texto =
+        String(valor)
+            .trim()
+            .replace(/\s/g, "");
+
+
+    if (
+        texto.includes(",") &&
+        !texto.includes(".")
+    ) {
+
+        texto =
+            texto.replace(",", ".");
+
+    }
+
+    else if (
+        texto.includes(",") &&
+        texto.includes(".")
+    ) {
+
+        texto =
+            texto
+                .replace(/\./g, "")
+                .replace(",", ".");
+
+    }
+
+
+    const resultado =
+        Number(texto);
+
+
+    return Number.isFinite(resultado)
+        ? resultado
+        : 0;
+
+}
+
+
+function formatoNumero(
+    valor,
+    decimales = 2
+) {
+
+    return Number(valor || 0)
+        .toLocaleString(
+            "es-CO",
+            {
+                minimumFractionDigits:
+                    decimales,
+
+                maximumFractionDigits:
+                    decimales
+            }
+        );
+
+}
+
+
+function valorCampo(
+    fila,
+    campo
+) {
+
+    const candidatos =
+        Array.isArray(campo)
+            ? campo
+            : [campo];
+
+
+    for (
+        const candidato of candidatos
+    ) {
+
+        const clave =
+            normalizarEncabezado(
+                candidato
+            );
+
+
+        if (
+            fila[clave] !== undefined &&
+            limpiarTexto(
+                fila[clave]
+            ) !== ""
+        ) {
+
+            return fila[clave];
+
+        }
+
+    }
+
+
+    return "";
+
+}
+
+
+/* ============================================================
+   CARGAR EXCEL
+============================================================ */
+
+$("archivoExcel")
+    .addEventListener(
+        "change",
+        cargarExcel
+    );
+
+
+async function cargarExcel(evento) {
+
+    const archivo =
+        evento.target.files[0];
+
+
+    if (!archivo) {
+        return;
+    }
+
+
+    const buffer =
+        await archivo.arrayBuffer();
+
+
+    const workbook =
+        XLSX.read(
+            buffer,
+            {
+                type: "array"
+            }
+        );
+
+
+    const primeraHoja =
+        workbook.SheetNames[0];
+
+
+    const worksheet =
+        workbook.Sheets[
+            primeraHoja
+        ];
+
+
+    const matriz =
+        XLSX.utils.sheet_to_json(
+            worksheet,
+            {
+                header: 1,
+                defval: "",
+                raw: true
+            }
+        );
+
+
+    if (matriz.length < 2) {
+
+        alert(
+            "No se encontraron datos en el archivo."
+        );
+
+        return;
+
+    }
+
+
+    const encabezados =
+        matriz[0].map(
+            normalizarEncabezado
+        );
+
+
+    const filas = [];
+
+
+    for (
+        let i = 1;
+        i < matriz.length;
+        i++
+    ) {
+
+        const filaExcel =
+            matriz[i];
+
+        const fila = {};
+
+
+        encabezados.forEach(
+            (encabezado, indice) => {
+
+                const nombre =
+                    encabezado ||
+                    `COLUMNA_${indice + 1}`;
+
+
+                fila[nombre] =
+                    filaExcel[indice] ?? "";
+
+            }
+        );
+
+
+        fila.__FILA =
+            i + 1;
+
+
+        filas.push(fila);
+
+    }
+
+
+    datos =
+        reconstruirDatos(
+            filas
+        );
+
+
+    datosFiltrados =
+        [...datos];
+
+
+    $("pantallaInicial")
+        .classList.add(
+            "hidden"
+        );
+
+
+    $("dashboard")
+        .classList.remove(
+            "hidden"
+        );
+
+
+    $("nombreArchivo")
+        .textContent =
+        archivo.name;
+
+
+    $("estadoArchivo")
+        .textContent =
+        `${obtenerInstrumentos(datos).length} instrumentos detectados`;
+
+
+    cargarFiltros();
+
+    actualizarDashboard();
+
+}
+
+
+/* ============================================================
+   RECONSTRUIR DATOS
+============================================================ */
+
+function reconstruirDatos(
+    filas
+) {
+
+    let archivoActual = "";
+
+    let memoriaInstrumento = {};
+
+    let funcionActual = "";
+
+    const resultado = [];
+
+
+    const heredables = [
+
+        CAMPOS.sede,
+        CAMPOS.dependencia,
+        CAMPOS.grupo,
+        CAMPOS.nivel,
+        CAMPOS.naturaleza,
+        CAMPOS.denominacion,
+        CAMPOS.codigo,
+        CAMPOS.grado,
+        CAMPOS.dedicacion
+
+    ];
+
+
+    for (
+        const fila of filas
+    ) {
+
+        let archivo =
+            limpiarTexto(
+                valorCampo(
+                    fila,
+                    CAMPOS.archivo
+                )
+            );
+
+
+        if (archivo) {
+
+            if (
+                archivo !==
+                archivoActual
+            ) {
+
+                archivoActual =
+                    archivo;
+
+                memoriaInstrumento = {};
+
+                funcionActual = "";
+
+            }
+
+        }
+
+        else {
+
+            archivo =
+                archivoActual;
+
+        }
+
+
+        if (!archivo) {
+            continue;
+        }
+
+
+        fila.__ARCHIVO =
+            archivo;
+
+
+        for (
+            const campo of heredables
+        ) {
+
+            const candidatos =
+                Array.isArray(campo)
+                    ? campo
+                    : [campo];
+
+
+            let encontrado = "";
+
+
+            for (
+                const candidato of candidatos
+            ) {
+
+                const clave =
+                    normalizarEncabezado(
+                        candidato
+                    );
+
+
+                if (
+                    limpiarTexto(
+                        fila[clave]
+                    )
+                ) {
+
+                    encontrado =
+                        fila[clave];
+
+
+                    memoriaInstrumento[
+                        clave
+                    ] =
+                        fila[clave];
+
+
+                    break;
+
+                }
+
+            }
+
+
+            if (!encontrado) {
+
+                for (
+                    const candidato
+                    of candidatos
+                ) {
+
+                    const clave =
+                        normalizarEncabezado(
+                            candidato
+                        );
+
+
+                    if (
+                        memoriaInstrumento[
+                            clave
+                        ]
+                    ) {
+
+                        fila[clave] =
+                            memoriaInstrumento[
+                                clave
+                            ];
+
+                    }
+
+                }
+
+            }
+
+        }
+
+
+        const funcion =
+            limpiarTexto(
+                valorCampo(
+                    fila,
+                    CAMPOS.funcion
+                )
+            );
+
+
+        if (funcion) {
+
+            funcionActual =
+                funcion;
+
+        }
+
+
+        fila.__FUNCION =
+            funcionActual;
+
+
+        resultado.push(
+            fila
+        );
+
+    }
+
+
+    return resultado;
+
+}
+
+
+/* ============================================================
+   FILTROS
+============================================================ */
+
+function cargarFiltros() {
+
+    llenarSelect(
+        "filtroSede",
+        valoresUnicos(
+            datos.map(
+                x =>
+                    limpiarTexto(
+                        valorCampo(
+                            x,
+                            CAMPOS.sede
+                        )
+                    )
+            )
+        )
+    );
+
+
+    llenarSelect(
+        "filtroDependencia",
+        valoresUnicos(
+            datos.map(
+                x =>
+                    limpiarTexto(
+                        valorCampo(
+                            x,
+                            CAMPOS.dependencia
+                        )
+                    )
+            )
+        )
+    );
+
+
+    llenarSelect(
+        "filtroNivel",
+        valoresUnicos(
+            datos.map(
+                x =>
+                    limpiarTexto(
+                        valorCampo(
+                            x,
+                            CAMPOS.nivel
+                        )
+                    )
+            )
+        )
+    );
+
+
+    llenarSelect(
+        "filtroInstrumento",
+        obtenerInstrumentos(
+            datos
+        )
+        .map(
+            x => x.archivo
+        )
+    );
+
+}
+
+
+function llenarSelect(
+    id,
+    valores
+) {
+
+    const select =
+        $(id);
+
+
+    const textoInicial =
+        select.options[0]
+            .textContent;
+
+
+    select.innerHTML = "";
+
+
+    const inicial =
+        document.createElement(
+            "option"
+        );
+
+
+    inicial.value = "";
+    inicial.textContent =
+        textoInicial;
+
+
+    select.appendChild(
+        inicial
+    );
+
+
+    valores.forEach(
+        valor => {
+
+            if (!valor) {
+                return;
+            }
+
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+
+            option.value =
+                valor;
+
+            option.textContent =
+                valor;
+
+
+            select.appendChild(
+                option
+            );
+
+        }
+    );
+
+}
+
+
+function valoresUnicos(array) {
+
+    return [
+        ...new Set(
+            array.filter(
+                Boolean
+            )
+        )
+    ]
+    .sort(
+        (a, b) =>
+            String(a)
+                .localeCompare(
+                    String(b),
+                    "es"
+                )
+    );
+
+}
+
+
+[
+    "filtroSede",
+    "filtroDependencia",
+    "filtroNivel",
+    "filtroInstrumento"
+
+].forEach(
+    id => {
+
+        $(id)
+            .addEventListener(
+                "change",
+                aplicarFiltros
+            );
+
+    }
+);
+
+
+function aplicarFiltros() {
+
+    const sede =
+        $("filtroSede").value;
+
+    const dependencia =
+        $("filtroDependencia").value;
+
+    const nivel =
+        $("filtroNivel").value;
+
+    const instrumento =
+        $("filtroInstrumento").value;
+
+
+    datosFiltrados =
+        datos.filter(
+            fila => {
+
+                const cumpleSede =
+                    !sede ||
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.sede
+                        )
+                    ) === sede;
+
+
+                const cumpleDependencia =
+                    !dependencia ||
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.dependencia
+                        )
+                    ) ===
+                    dependencia;
+
+
+                const cumpleNivel =
+                    !nivel ||
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.nivel
+                        )
+                    ) ===
+                    nivel;
+
+
+                const cumpleInstrumento =
+                    !instrumento ||
+                    fila.__ARCHIVO ===
+                    instrumento;
+
+
+                return (
+                    cumpleSede &&
+                    cumpleDependencia &&
+                    cumpleNivel &&
+                    cumpleInstrumento
+                );
+
+            }
+        );
+
+
+    actualizarDashboard();
+
+}
+
+
+function limpiarFiltros() {
+
+    $("filtroSede").value = "";
+    $("filtroDependencia").value = "";
+    $("filtroNivel").value = "";
+    $("filtroInstrumento").value = "";
+
+
+    datosFiltrados =
+        [...datos];
+
+
+    actualizarDashboard();
+
+}
+
+
+/* ============================================================
+   OBTENER INSTRUMENTOS
+============================================================ */
+
+function obtenerInstrumentos(
+    lista
+) {
+
+    const mapa =
+        new Map();
+
+
+    lista.forEach(
+        fila => {
+
+            const archivo =
+                fila.__ARCHIVO;
+
+
+            if (!archivo) {
+                return;
+            }
+
+
+            if (
+                !mapa.has(
+                    archivo
+                )
+            ) {
+
+                mapa.set(
+                    archivo,
+                    {
+
+                        archivo,
+
+                        sede:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.sede
+                                )
+                            ),
+
+                        dependencia:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.dependencia
+                                )
+                            ),
+
+                        nivel:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.nivel
+                                )
+                            ),
+
+                        denominacion:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.denominacion
+                                )
+                            ),
+
+                        codigo:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.codigo
+                                )
+                            ),
+
+                        grado:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.grado
+                                )
+                            ),
+
+                        carga: null,
+
+                        horas: 0,
+
+                        funciones:
+                            new Set(),
+
+                        actividades: 0
+
+                    }
+                );
+
+            }
+
+
+            const item =
+                mapa.get(
+                    archivo
+                );
+
+
+            const carga =
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.carga
+                    )
+                );
+
+
+            if (carga !== 0) {
+
+                item.carga =
+                    carga;
+
+            }
+
+
+            item.horas +=
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.horas
+                    )
+                );
+
+
+            if (
+                fila.__FUNCION
+            ) {
+
+                item.funciones.add(
+                    fila.__FUNCION
+                );
+
+            }
+
+
+            const actividad =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.actividad
+                    )
+                );
+
+
+            if (actividad) {
+
+                item.actividades++;
+
+            }
+
+        }
+    );
+
+
+    return [
+        ...mapa.values()
+    ];
+
+}
+
+
+/* ============================================================
+   ACTUALIZAR DASHBOARD
+============================================================ */
+
+function actualizarDashboard() {
+
+    actualizarKPIs();
+
+    actualizarGraficos();
+
+    renderFunciones();
+
+    renderActividades();
+
+    renderServidores();
+
+}
+
+
+/* ============================================================
+   KPIs
+============================================================ */
+
+function actualizarKPIs() {
+
+    const instrumentos =
+        obtenerInstrumentos(
+            datosFiltrados
+        );
+
+
+    $("kpiInstrumentos")
+        .textContent =
+        instrumentos.length;
+
+
+    const cargas =
+        instrumentos
+            .map(
+                x => x.carga
+            )
+            .filter(
+                x =>
+                    x !== null &&
+                    Number.isFinite(x)
+            );
+
+
+    const promedioCarga =
+        cargas.length
+            ?
+            cargas.reduce(
+                (a, b) =>
+                    a + b,
+                0
+            ) /
+            cargas.length
+            :
+            null;
+
+
+    $("kpiCarga")
+        .textContent =
+        promedioCarga !== null
+            ?
+            formatoNumero(
+                promedioCarga,
+                4
+            )
+            :
+            "—";
+
+
+    let funciones = 0;
+
+
+    instrumentos.forEach(
+        x =>
+            funciones +=
+            x.funciones.size
+    );
+
+
+    $("kpiFunciones")
+        .textContent =
+        funciones;
+
+
+    const actividades =
+        datosFiltrados
+            .filter(
+                fila =>
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.actividad
+                        )
+                    )
+            );
+
+
+    $("kpiActividades")
+        .textContent =
+        actividades.length;
+
+
+    const horas =
+        actividades.reduce(
+            (total, fila) =>
+                total +
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.horas
+                    )
+                ),
+            0
+        );
+
+
+    $("kpiHoras")
+        .textContent =
+        formatoNumero(
+            horas,
+            2
+        );
+
+}
+
+
+/* ============================================================
+   GRÁFICOS
+============================================================ */
+
+function destruirGrafico(
+    nombre
+) {
+
+    if (
+        graficos[nombre]
+    ) {
+
+        graficos[nombre]
+            .destroy();
+
+
+        delete graficos[
+            nombre
+        ];
+
+    }
+
+}
+
+
+function actualizarGraficos() {
+
+    graficoCarga();
+    graficoFunciones();
+    graficoTipoCarga();
+    graficoImpacto();
+    graficoFlujoHoras();
+    graficoTopActividades();
+
+}
+
+
+/* ============================================================
+   CARGA POR SERVIDOR
+============================================================ */
+
+function graficoCarga() {
+
+    destruirGrafico(
+        "carga"
+    );
+
+
+    const instrumentos =
+        obtenerInstrumentos(
+            datosFiltrados
+        )
+        .filter(
+            x =>
+                x.carga !== null
+        )
+        .sort(
+            (a, b) =>
+                b.carga -
+                a.carga
+        );
+
+
+    const etiquetas =
+        instrumentos.map(
+            x => {
+
+                const cargo =
+                    x.denominacion
+                        ?
+                        ` - ${x.denominacion}`
+                        :
+                        "";
+
+
+                return (
+                    x.archivo
+                        .replace(
+                            /\.xlsx?$/i,
+                            ""
+                        ) +
+                    cargo
+                );
+
+            }
+        );
+
+
+    graficos.carga =
+        new Chart(
+            $("chartCarga"),
+            {
+
+                type: "bar",
+
+                data: {
+
+                    labels:
+                        etiquetas,
+
+                    datasets: [{
+
+                        label:
+                            "Índice de carga",
+
+                        data:
+                            instrumentos.map(
+                                x =>
+                                    x.carga
+                            ),
+
+                        backgroundColor:
+                            "#006633",
+
+                        borderRadius:
+                            5
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    indexAxis:
+                        "y",
+
+                    layout: {
+
+                        padding: {
+                            right: 55
+                        }
+
+                    },
+
+                    plugins: {
+
+                        legend: {
+                            display:
+                                false
+                        },
+
+                        datalabels: {
+
+                            display:
+                                true,
+
+                            anchor:
+                                "end",
+
+                            align:
+                                "right",
+
+                            offset:
+                                5,
+
+                            clip:
+                                false,
+
+                            color:
+                                "#1f2937",
+
+                            font: {
+                                weight:
+                                    "bold",
+                                size:
+                                    12
+                            },
+
+                            formatter(
+                                valor
+                            ) {
+
+                                return formatoNumero(
+                                    valor,
+                                    4
+                                );
+
+                            }
+
+                        },
+
+                        tooltip: {
+
+                            callbacks: {
+
+                                label(
+                                    context
+                                ) {
+
+                                    return (
+                                        "Índice: " +
+                                        formatoNumero(
+                                            context.raw,
+                                            4
+                                        )
+                                    );
+
+                                }
+
+                            }
+
+                        }
+
+                    },
+
+                    scales: {
+
+                        x: {
+
+                            beginAtZero:
+                                true,
+
+                            grace:
+                                "15%",
+
+                            title: {
+
+                                display:
+                                    true,
+
+                                text:
+                                    "Índice TOTAL CARGA"
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   EJECUCIÓN DE FUNCIONES
+============================================================ */
+
+function graficoFunciones() {
+
+    destruirGrafico(
+        "funciones"
+    );
+
+
+    let si = 0;
+    let no = 0;
+    let otros = 0;
+
+
+    datosFiltrados
+        .forEach(
+            fila => {
+
+                const funcionOriginal =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.funcion
+                        )
+                    );
+
+
+                if (
+                    !funcionOriginal
+                ) {
+                    return;
+                }
+
+
+                const realiza =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.realiza
+                        )
+                    )
+                    .toUpperCase();
+
+
+                if (
+                    realiza === "SI" ||
+                    realiza === "SÍ"
+                ) {
+
+                    si++;
+
+                }
+
+                else if (
+                    realiza === "NO"
+                ) {
+
+                    no++;
+
+                }
+
+                else {
+
+                    otros++;
+
+                }
+
+            }
+        );
+
+
+    const labels =
+        [
+            "Sí realiza",
+            "No realiza"
+        ];
+
+
+    const valores =
+        [
+            si,
+            no
+        ];
+
+
+    const colores =
+        [
+            "#006633",
+            "#dc2626"
+        ];
+
+
+    if (
+        otros > 0
+    ) {
+
+        labels.push(
+            "Sin información"
+        );
+
+        valores.push(
+            otros
+        );
+
+        colores.push(
+            "#9ca3af"
+        );
+
+    }
+
+
+    graficos.funciones =
+        new Chart(
+            $("chartFunciones"),
+            {
+
+                type:
+                    "doughnut",
+
+                data: {
+
+                    labels,
+
+                    datasets: [{
+
+                        data:
+                            valores,
+
+                        backgroundColor:
+                            colores,
+
+                        borderColor:
+                            "#ffffff",
+
+                        borderWidth:
+                            3
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    cutout:
+                        "48%",
+
+                    plugins: {
+
+                        legend: {
+
+                            position:
+                                "bottom",
+
+                            labels: {
+
+                                padding:
+                                    20,
+
+                                usePointStyle:
+                                    true
+
+                            }
+
+                        },
+
+                        datalabels: {
+
+                            color:
+                                "#ffffff",
+
+                            font: {
+
+                                weight:
+                                    "bold",
+
+                                size:
+                                    13
+
+                            },
+
+                            textAlign:
+                                "center",
+
+                            formatter(
+                                valor,
+                                contexto
+                            ) {
+
+                                if (
+                                    valor === 0
+                                ) {
+                                    return "";
+                                }
+
+
+                                const datos =
+                                    contexto
+                                        .chart
+                                        .data
+                                        .datasets[0]
+                                        .data;
+
+
+                                const total =
+                                    datos.reduce(
+                                        (a, b) =>
+                                            a + b,
+                                        0
+                                    );
+
+
+                                const porcentaje =
+                                    total > 0
+                                        ?
+                                        (
+                                            valor /
+                                            total *
+                                            100
+                                        )
+                                        .toFixed(
+                                            1
+                                        )
+                                        :
+                                        0;
+
+
+                                return (
+                                    valor +
+                                    "\n" +
+                                    porcentaje
+                                        .replace(
+                                            ".",
+                                            ","
+                                        ) +
+                                    "%"
+                                );
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   TIPO DE CARGA
+============================================================ */
+
+function graficoTipoCarga() {
+
+    destruirGrafico(
+        "tipoCarga"
+    );
+
+
+    const conteo = {};
+
+
+    datosFiltrados
+        .forEach(
+            fila => {
+
+                const actividad =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.actividad
+                        )
+                    );
+
+
+                if (
+                    !actividad
+                ) {
+                    return;
+                }
+
+
+                const tipo =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.tipoCarga
+                        )
+                    )
+                    ||
+                    "Sin clasificación";
+
+
+                conteo[tipo] =
+                    (
+                        conteo[tipo]
+                        ||
+                        0
+                    )
+                    +
+                    1;
+
+            }
+        );
+
+
+    const colores = [
+        "#006633",
+        "#2563eb",
+        "#7c3aed",
+        "#d97706",
+        "#0891b2",
+        "#be123c",
+        "#4b5563",
+        "#65a30d"
+    ];
+
+
+    graficos.tipoCarga =
+        new Chart(
+            $("chartTipoCarga"),
+            {
+
+                type:
+                    "doughnut",
+
+                data: {
+
+                    labels:
+                        Object.keys(
+                            conteo
+                        ),
+
+                    datasets: [{
+
+                        data:
+                            Object.values(
+                                conteo
+                            ),
+
+                        backgroundColor:
+                            colores,
+
+                        borderColor:
+                            "#ffffff",
+
+                        borderWidth:
+                            3
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    cutout:
+                        "45%",
+
+                    plugins: {
+
+                        legend: {
+
+                            position:
+                                "bottom",
+
+                            labels: {
+
+                                padding:
+                                    15,
+
+                                usePointStyle:
+                                    true
+
+                            }
+
+                        },
+
+                        datalabels: {
+
+                            color:
+                                "#ffffff",
+
+                            font: {
+
+                                weight:
+                                    "bold",
+
+                                size:
+                                    11
+
+                            },
+
+                            textAlign:
+                                "center",
+
+                            formatter(
+                                valor,
+                                contexto
+                            ) {
+
+                                if (
+                                    valor === 0
+                                ) {
+                                    return "";
+                                }
+
+
+                                const datos =
+                                    contexto
+                                        .chart
+                                        .data
+                                        .datasets[0]
+                                        .data;
+
+
+                                const total =
+                                    datos.reduce(
+                                        (a, b) =>
+                                            a + b,
+                                        0
+                                    );
+
+
+                                const porcentaje =
+                                    (
+                                        valor /
+                                        total *
+                                        100
+                                    )
+                                    .toFixed(
+                                        1
+                                    );
+
+
+                                return (
+                                    valor +
+                                    "\n" +
+                                    porcentaje
+                                        .replace(
+                                            ".",
+                                            ","
+                                        ) +
+                                    "%"
+                                );
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   NIVEL DE IMPACTO
+============================================================ */
+
+function graficoImpacto() {
+
+    destruirGrafico(
+        "impacto"
+    );
+
+
+    const conteo = {};
+
+
+    datosFiltrados
+        .forEach(
+            fila => {
+
+                const actividad =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.actividad
+                        )
+                    );
+
+
+                if (
+                    !actividad
+                ) {
+                    return;
+                }
+
+
+                const impacto =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.impacto
+                        )
+                    )
+                    ||
+                    "Sin información";
+
+
+                conteo[impacto] =
+                    (
+                        conteo[impacto]
+                        ||
+                        0
+                    )
+                    +
+                    1;
+
+            }
+        );
+
+
+    graficos.impacto =
+        new Chart(
+            $("chartImpacto"),
+            {
+
+                type:
+                    "bar",
+
+                data: {
+
+                    labels:
+                        Object.keys(
+                            conteo
+                        ),
+
+                    datasets: [{
+
+                        label:
+                            "Actividades",
+
+                        data:
+                            Object.values(
+                                conteo
+                            ),
+
+                        backgroundColor:
+                            "#2563eb",
+
+                        borderRadius:
+                            5
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    layout: {
+
+                        padding: {
+                            top: 25
+                        }
+
+                    },
+
+                    plugins: {
+
+                        legend: {
+                            display:
+                                false
+                        },
+
+                        datalabels: {
+
+                            anchor:
+                                "end",
+
+                            align:
+                                "top",
+
+                            color:
+                                "#1f2937",
+
+                            font: {
+
+                                weight:
+                                    "bold",
+
+                                size:
+                                    13
+
+                            },
+
+                            formatter(
+                                valor
+                            ) {
+
+                                return valor;
+
+                            }
+
+                        }
+
+                    },
+
+                    scales: {
+
+                        y: {
+
+                            beginAtZero:
+                                true,
+
+                            grace:
+                                "15%",
+
+                            ticks: {
+                                precision:
+                                    0
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   HORAS POR FLUJO
+============================================================ */
+
+function graficoFlujoHoras() {
+
+    destruirGrafico(
+        "flujoHoras"
+    );
+
+
+    const agrupado = {};
+
+
+    datosFiltrados
+        .forEach(
+            fila => {
+
+                const actividad =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.actividad
+                        )
+                    );
+
+
+                if (
+                    !actividad
+                ) {
+                    return;
+                }
+
+
+                const flujo =
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.flujo
+                        )
+                    )
+                    ||
+                    "Sin información";
+
+
+                const horas =
+                    numero(
+                        valorCampo(
+                            fila,
+                            CAMPOS.horas
+                        )
+                    );
+
+
+                agrupado[flujo] =
+                    (
+                        agrupado[
+                            flujo
+                        ]
+                        ||
+                        0
+                    )
+                    +
+                    horas;
+
+            }
+        );
+
+
+    const ordenado =
+        Object.entries(
+            agrupado
+        )
+        .sort(
+            (a, b) =>
+                b[1] -
+                a[1]
+        )
+        .slice(
+            0,
+            12
+        );
+
+
+    graficos.flujoHoras =
+        new Chart(
+            $("chartFlujoHoras"),
+            {
+
+                type:
+                    "bar",
+
+                data: {
+
+                    labels:
+                        ordenado.map(
+                            x =>
+                                x[0]
+                        ),
+
+                    datasets: [{
+
+                        label:
+                            "Horas / mes",
+
+                        data:
+                            ordenado.map(
+                                x =>
+                                    x[1]
+                            ),
+
+                        backgroundColor:
+                            "#006633",
+
+                        borderRadius:
+                            5
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    indexAxis:
+                        "y",
+
+                    layout: {
+
+                        padding: {
+                            right:
+                                65
+                        }
+
+                    },
+
+                    plugins: {
+
+                        legend: {
+                            display:
+                                false
+                        },
+
+                        datalabels: {
+
+                            anchor:
+                                "end",
+
+                            align:
+                                "right",
+
+                            offset:
+                                5,
+
+                            clip:
+                                false,
+
+                            color:
+                                "#1f2937",
+
+                            font: {
+
+                                weight:
+                                    "bold",
+
+                                size:
+                                    11
+
+                            },
+
+                            formatter(
+                                valor
+                            ) {
+
+                                return (
+                                    formatoNumero(
+                                        valor,
+                                        2
+                                    )
+                                    +
+                                    " h"
+                                );
+
+                            }
+
+                        }
+
+                    },
+
+                    scales: {
+
+                        x: {
+
+                            beginAtZero:
+                                true,
+
+                            grace:
+                                "20%"
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   TOP ACTIVIDADES
+============================================================ */
+
+function graficoTopActividades() {
+
+    destruirGrafico(
+        "topActividades"
+    );
+
+
+    const actividades =
+        datosFiltrados
+            .map(
+                fila => {
+
+                    return {
+
+                        actividad:
+                            limpiarTexto(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.actividad
+                                )
+                            ),
+
+                        horas:
+                            numero(
+                                valorCampo(
+                                    fila,
+                                    CAMPOS.horas
+                                )
+                            )
+
+                    };
+
+                }
+            )
+            .filter(
+                x =>
+                    x.actividad &&
+                    x.horas > 0
+            )
+            .sort(
+                (a, b) =>
+                    b.horas -
+                    a.horas
+            )
+            .slice(
+                0,
+                10
+            );
+
+
+    graficos.topActividades =
+        new Chart(
+            $("chartTopActividades"),
+            {
+
+                type:
+                    "bar",
+
+                data: {
+
+                    labels:
+                        actividades.map(
+                            x =>
+                                cortarTexto(
+                                    x.actividad,
+                                    45
+                                )
+                        ),
+
+                    datasets: [{
+
+                        label:
+                            "HH / mes",
+
+                        data:
+                            actividades.map(
+                                x =>
+                                    x.horas
+                            ),
+
+                        backgroundColor:
+                            "#7c3aed",
+
+                        borderRadius:
+                            5
+
+                    }]
+
+                },
+
+                options: {
+
+                    responsive:
+                        true,
+
+                    maintainAspectRatio:
+                        false,
+
+                    indexAxis:
+                        "y",
+
+                    layout: {
+
+                        padding: {
+                            right:
+                                65
+                        }
+
+                    },
+
+                    plugins: {
+
+                        legend: {
+                            display:
+                                false
+                        },
+
+                        datalabels: {
+
+                            anchor:
+                                "end",
+
+                            align:
+                                "right",
+
+                            offset:
+                                5,
+
+                            clip:
+                                false,
+
+                            color:
+                                "#1f2937",
+
+                            font: {
+
+                                weight:
+                                    "bold",
+
+                                size:
+                                    11
+
+                            },
+
+                            formatter(
+                                valor
+                            ) {
+
+                                return (
+                                    formatoNumero(
+                                        valor,
+                                        2
+                                    )
+                                    +
+                                    " h"
+                                );
+
+                            }
+
+                        }
+
+                    },
+
+                    scales: {
+
+                        x: {
+
+                            beginAtZero:
+                                true,
+
+                            grace:
+                                "20%"
+
+                        }
+
+                    }
+
+                }
+
+            }
+        );
+
+}
+
+
+/* ============================================================
+   TABLA FUNCIONES
+============================================================ */
+
+function renderFunciones() {
+
+    const tbody =
+        $("tablaFunciones");
+
+
+    tbody.innerHTML = "";
+
+
+    const filas =
+        datosFiltrados
+            .filter(
+                fila =>
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.funcion
+                        )
+                    )
+            );
+
+
+    filas.forEach(
+        fila => {
+
+            const funcion =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.funcion
+                    )
+                );
+
+
+            const realiza =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.realiza
+                    )
+                );
+
+
+            const motivo =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.motivo
+                    )
+                );
+
+
+            const cargo =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.denominacion
+                    )
+                );
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.className =
+                "border-b hover:bg-gray-50";
+
+
+            let badge =
+                "—";
+
+
+            if (
+                realiza
+                    .toUpperCase() ===
+                    "SI" ||
+                realiza
+                    .toUpperCase() ===
+                    "SÍ"
+            ) {
+
+                badge =
+                    `<span class="bg-green-100 text-green-800 px-2 py-1 rounded font-bold">SÍ</span>`;
+
+            }
+
+            else if (
+                realiza
+                    .toUpperCase() ===
+                    "NO"
+            ) {
+
+                badge =
+                    `<span class="bg-red-100 text-red-800 px-2 py-1 rounded font-bold">NO</span>`;
+
+            }
+
+
+            tr.innerHTML = `
+
+                <td class="p-3 font-semibold whitespace-nowrap">
+                    ${escapar(fila.__ARCHIVO)}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(cargo || "—")}
+                </td>
+
+                <td class="p-3 min-w-[400px]">
+                    ${escapar(funcion)}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${badge}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(motivo || "—")}
+                </td>
+
+            `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   TABLA ACTIVIDADES
+============================================================ */
+
+function renderActividades() {
+
+    const tbody =
+        $("tablaActividades");
+
+
+    tbody.innerHTML = "";
+
+
+    const filas =
+        datosFiltrados
+            .filter(
+                fila =>
+                    limpiarTexto(
+                        valorCampo(
+                            fila,
+                            CAMPOS.actividad
+                        )
+                    )
+            );
+
+
+    filas.forEach(
+        fila => {
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.className =
+                "border-b hover:bg-gray-50";
+
+
+            const flujo =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.flujo
+                    )
+                );
+
+
+            const actividad =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.actividad
+                    )
+                );
+
+
+            const tipo =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.tipoCarga
+                    )
+                );
+
+
+            const frecuencia =
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.frecuencia
+                    )
+                );
+
+
+            const estandar =
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.tiempoEstandar
+                    )
+                );
+
+
+            const horas =
+                numero(
+                    valorCampo(
+                        fila,
+                        CAMPOS.horas
+                    )
+                );
+
+
+            const impacto =
+                limpiarTexto(
+                    valorCampo(
+                        fila,
+                        CAMPOS.impacto
+                    )
+                );
+
+
+            tr.innerHTML = `
+
+                <td class="p-3 font-semibold">
+                    ${escapar(fila.__ARCHIVO)}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(flujo || "—")}
+                </td>
+
+                <td class="p-3 min-w-[350px]">
+                    ${escapar(actividad)}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(tipo || "—")}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${formatoNumero(frecuencia, 0)}
+                </td>
+
+                <td class="p-3 text-right">
+                    ${formatoNumero(estandar, 2)}
+                </td>
+
+                <td class="p-3 text-right font-bold text-[#006633]">
+                    ${formatoNumero(horas, 2)}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${escapar(impacto || "—")}
+                </td>
+
+            `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   TABLA SERVIDORES
+============================================================ */
+
+function renderServidores() {
+
+    const tbody =
+        $("tablaServidores");
+
+
+    tbody.innerHTML = "";
+
+
+    const instrumentos =
+        obtenerInstrumentos(
+            datosFiltrados
+        )
+        .sort(
+            (a, b) =>
+                (b.carga || 0)
+                -
+                (a.carga || 0)
+        );
+
+
+    instrumentos.forEach(
+        item => {
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.className =
+                "instrumento-row border-b";
+
+
+            tr.onclick =
+                () => {
+
+                    $("filtroInstrumento")
+                        .value =
+                        item.archivo;
+
+
+                    aplicarFiltros();
+
+
+                    window.scrollTo({
+                        top: 0,
+                        behavior:
+                            "smooth"
+                    });
+
+                };
+
+
+            tr.innerHTML = `
+
+                <td class="p-3 font-bold text-[#006633]">
+                    ${escapar(item.archivo)}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(item.sede || "—")}
+                </td>
+
+                <td class="p-3 min-w-[280px]">
+                    ${escapar(item.dependencia || "—")}
+                </td>
+
+                <td class="p-3">
+                    ${escapar(item.denominacion || "—")}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${escapar(item.codigo || "—")}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${escapar(item.grado || "—")}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${item.funciones.size}
+                </td>
+
+                <td class="p-3 text-center">
+                    ${item.actividades}
+                </td>
+
+                <td class="p-3 text-right">
+                    ${formatoNumero(item.horas, 2)}
+                </td>
+
+                <td class="p-3 text-right text-lg font-bold">
+                    ${
+                        item.carga !== null
+                            ?
+                            formatoNumero(
+                                item.carga,
+                                4
+                            )
+                            :
+                            "—"
+                    }
+                </td>
+
+            `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   PESTAÑAS
+============================================================ */
+
+function mostrarTab(
+    nombre,
+    boton
+) {
+
+    document
+        .querySelectorAll(
+            ".tab-content"
+        )
+        .forEach(
+            elemento =>
+                elemento
+                    .classList
+                    .add(
+                        "hidden"
+                    )
+        );
+
+
+    $(
+        `tab-${nombre}`
+    )
+    .classList
+    .remove(
+        "hidden"
+    );
+
+
+    document
+        .querySelectorAll(
+            ".tab-btn"
+        )
+        .forEach(
+            b => {
+
+                b.classList
+                    .remove(
+                        "active"
+                    );
+
+
+                b.classList
+                    .add(
+                        "bg-white"
+                    );
+
+            }
+        );
+
+
+    boton
+        .classList
+        .add(
+            "active"
+        );
+
+
+    boton
+        .classList
+        .remove(
+            "bg-white"
+        );
+
+}
+
+
+/* ============================================================
+   UTILIDADES
+============================================================ */
+
+function cortarTexto(
+    texto,
+    limite
+) {
+
+    texto =
+        String(
+            texto || ""
+        );
+
+
+    return (
+        texto.length >
+        limite
+    )
+        ?
+        texto.substring(
+            0,
+            limite
+        ) +
+        "…"
+        :
+        texto;
+
+}
+
+
+function escapar(
+    texto
+) {
+
+    const div =
+        document.createElement(
+            "div"
+        );
+
+
+    div.textContent =
+        String(
+            texto ?? ""
+        );
+
+
+    return div.innerHTML;
+
+}
+
+</script>
+
+</body>
+</html>
