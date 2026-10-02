@@ -325,7 +325,7 @@
             </p>
 
             <p class="text-xs text-gray-400 mt-2">
-                Total de actividades
+Total de horas registradas en el consolidado
             </p>
         </div>
 
@@ -1836,16 +1836,26 @@ function actualizarKPIs() {
         actividades.length;
 
 
+    // Las horas hombre se calculan sobre TODAS las filas
+    // del consolidado, independientemente de PRODUCTO.
+    // Solo se ignoran celdas vacías o con valor 0.
     const horas =
-        actividades.reduce(
-            (total, fila) =>
-                total +
-                numero(
-                    valorCampo(
-                        fila,
-                        CAMPOS.horas
-                    )
-                ),
+        datosFiltrados.reduce(
+            (total, fila) => {
+
+                const valorHoras =
+                    numero(
+                        valorCampo(
+                            fila,
+                            CAMPOS.horas
+                        )
+                    );
+
+                return total +
+                    (valorHoras > 0
+                        ? valorHoras
+                        : 0);
+            },
             0
         );
 
