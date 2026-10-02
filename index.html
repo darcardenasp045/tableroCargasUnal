@@ -310,7 +310,7 @@
             </p>
 
             <p class="text-xs text-gray-400 mt-2">
-                Actividades identificadas
+                Productos identificados
             </p>
         </div>
 
@@ -418,7 +418,7 @@
                 </h3>
 
                 <p class="text-xs text-gray-500 mt-1 mb-4">
-                    Número de actividades por clasificación
+                    Número de productos por interfaz
                 </p>
 
                 <div class="chart-container">
@@ -435,7 +435,7 @@
                 </h3>
 
                 <p class="text-xs text-gray-500 mt-1 mb-4">
-                    Distribución de las actividades según impacto
+                    Distribución de los productos según impacto
                 </p>
 
                 <div class="chart-container">
@@ -503,7 +503,7 @@
                 </h3>
 
                 <p class="text-xs text-gray-500 mt-1 mb-4">
-                    Concentración mensual de horas según flujo de actividad
+                    Concentración mensual de horas según flujo de producto
                 </p>
 
                 <div class="chart-container">
@@ -516,11 +516,11 @@
             <div class="card p-5">
 
                 <h3 class="font-bold text-lg">
-                    Actividades con mayor dedicación
+                    Productos con mayor dedicación
                 </h3>
 
                 <p class="text-xs text-gray-500 mt-1 mb-4">
-                    Mayor cantidad de horas hombre mensuales
+                    Mayor cantidad de horas hombre mensuales por producto
                 </p>
 
                 <div class="chart-container">
@@ -550,7 +550,7 @@
                             <th class="p-3 text-left">Instrumento</th>
                             <th class="p-3 text-left">Flujo</th>
                             <th class="p-3 text-left">Actividad</th>
-                            <th class="p-3 text-left">Tipo carga</th>
+                            <th class="p-3 text-left">Interfaz</th>
                             <th class="p-3 text-center">Frecuencia</th>
                             <th class="p-3 text-right">T. estándar</th>
                             <th class="p-3 text-right">HH / mes</th>
@@ -1514,7 +1514,15 @@ function obtenerInstrumentos(
     lista
 ) {
 
-    const mapa =
+    /*
+       REGLA PRINCIPAL:
+       1. Primero se separan todos los registros por ARCHIVO.
+       2. Después, todos los cálculos se realizan dentro de cada instrumento.
+       Así, un mismo PRODUCTO, FUNCIÓN o cualquier otro dato que aparezca
+       en instrumentos diferentes se contabiliza de forma independiente.
+    */
+
+    const grupos =
         new Map();
 
 
@@ -1522,7 +1530,9 @@ function obtenerInstrumentos(
         fila => {
 
             const archivo =
-                fila.__ARCHIVO;
+                limpiarTexto(
+                    fila.__ARCHIVO
+                );
 
 
             if (!archivo) {
@@ -1531,145 +1541,185 @@ function obtenerInstrumentos(
 
 
             if (
-                !mapa.has(
+                !grupos.has(
                     archivo
                 )
             ) {
 
-                mapa.set(
+                grupos.set(
                     archivo,
-                    {
-
-                        archivo,
-
-                        sede:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.sede
-                                )
-                            ),
-
-                        dependencia:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.dependencia
-                                )
-                            ),
-
-                        nivel:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.nivel
-                                )
-                            ),
-
-                        denominacion:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.denominacion
-                                )
-                            ),
-
-                        codigo:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.codigo
-                                )
-                            ),
-
-                        grado:
-                            limpiarTexto(
-                                valorCampo(
-                                    fila,
-                                    CAMPOS.grado
-                                )
-                            ),
-
-                        carga: null,
-
-                        horas: 0,
-
-                        funciones:
-                            new Set(),
-
-                        actividades: 0
-
-                    }
+                    []
                 );
 
             }
 
 
-            const item =
-                mapa.get(
-                    archivo
-                );
-
-
-            const carga =
-                numero(
-                    valorCampo(
-                        fila,
-                        CAMPOS.carga
-                    )
-                );
-
-
-            if (carga !== 0) {
-
-                item.carga =
-                    carga;
-
-            }
-
-
-            item.horas +=
-                numero(
-                    valorCampo(
-                        fila,
-                        CAMPOS.horas
-                    )
-                );
-
-
-            if (
-                fila.__FUNCION
-            ) {
-
-                item.funciones.add(
-                    fila.__FUNCION
-                );
-
-            }
-
-
-            const actividad =
-                limpiarTexto(
-                    valorCampo(
-                        fila,
-                        CAMPOS.actividad
-                    )
-                );
-
-
-            if (actividad) {
-
-                item.actividades++;
-
-            }
+            grupos
+                .get(archivo)
+                .push(fila);
 
         }
     );
 
 
-    return [
-        ...mapa.values()
-    ];
+    const instrumentos = [];
+
+
+    grupos.forEach(
+        (filasInstrumento, archivo) => {
+
+            const primeraFila =
+                filasInstrumento[0];
+
+
+            const funciones =
+                new Set();
+
+
+            let carga = null;
+            let horas = 0;
+            let actividades = 0;
+
+
+            filasInstrumento.forEach(
+                fila => {
+
+                    const funcion =
+                        limpiarTexto(
+                            fila.__FUNCION ||
+                            valorCampo(
+                                fila,
+                                CAMPOS.funcion
+                            )
+                        );
+
+
+                    if (funcion) {
+
+                        funciones.add(
+                            funcion
+                        );
+
+                    }
+
+
+                    const cargaFila =
+                        numero(
+                            valorCampo(
+                                fila,
+                                CAMPOS.carga
+                            )
+                        );
+
+
+                    if (cargaFila !== 0) {
+
+                        carga =
+                            cargaFila;
+
+                    }
+
+
+                    horas +=
+                        numero(
+                            valorCampo(
+                                fila,
+                                CAMPOS.horas
+                            )
+                        );
+
+
+                    /*
+                       En la pestaña Actividades la unidad de conteo
+                       es PRODUCTO, no ACTIVIDAD.
+                    */
+
+                    const producto =
+                        limpiarTexto(
+                            valorCampo(
+                                fila,
+                                CAMPOS.producto
+                            )
+                        );
+
+
+                    if (producto) {
+
+                        actividades++;
+
+                    }
+
+                }
+            );
+
+
+            instrumentos.push({
+
+                archivo,
+
+                sede:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.sede
+                        )
+                    ),
+
+                dependencia:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.dependencia
+                        )
+                    ),
+
+                nivel:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.nivel
+                        )
+                    ),
+
+                denominacion:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.denominacion
+                        )
+                    ),
+
+                codigo:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.codigo
+                        )
+                    ),
+
+                grado:
+                    limpiarTexto(
+                        valorCampo(
+                            primeraFila,
+                            CAMPOS.grado
+                        )
+                    ),
+
+                carga,
+
+                horas,
+
+                funciones,
+
+                actividades
+
+            });
+
+        }
+    );
+
+
+    return instrumentos;
 
 }
 
@@ -1762,6 +1812,12 @@ function actualizarKPIs() {
         funciones;
 
 
+    /*
+       Las actividades del tablero se contabilizan por PRODUCTO.
+       El mismo PRODUCTO en dos ARCHIVO diferentes se cuenta en ambos
+       instrumentos, porque cada instrumento se analiza por separado.
+    */
+
     const actividades =
         datosFiltrados
             .filter(
@@ -1769,7 +1825,7 @@ function actualizarKPIs() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.actividad
+                            CAMPOS.producto
                         )
                     )
             );
@@ -2328,7 +2384,7 @@ function graficoTipoCarga() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.actividad
+                            CAMPOS.producto
                         )
                     );
 
@@ -2344,7 +2400,7 @@ function graficoTipoCarga() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.tipoCarga
+                            CAMPOS.interface
                         )
                     )
                     ||
@@ -2545,7 +2601,7 @@ function graficoImpacto() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.actividad
+                            CAMPOS.producto
                         )
                     );
 
@@ -2721,7 +2777,7 @@ function graficoFlujoHoras() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.actividad
+                            CAMPOS.producto
                         )
                     );
 
@@ -2937,7 +2993,7 @@ function graficoTopActividades() {
                             limpiarTexto(
                                 valorCampo(
                                     fila,
-                                    CAMPOS.actividad
+                                    CAMPOS.producto
                                 )
                             ),
 
@@ -3264,7 +3320,7 @@ function renderActividades() {
                     limpiarTexto(
                         valorCampo(
                             fila,
-                            CAMPOS.actividad
+                            CAMPOS.producto
                         )
                     )
             );
@@ -3296,7 +3352,7 @@ function renderActividades() {
                 limpiarTexto(
                     valorCampo(
                         fila,
-                        CAMPOS.actividad
+                        CAMPOS.producto
                     )
                 );
 
@@ -3305,7 +3361,7 @@ function renderActividades() {
                 limpiarTexto(
                     valorCampo(
                         fila,
-                        CAMPOS.tipoCarga
+                        CAMPOS.interface
                     )
                 );
 
